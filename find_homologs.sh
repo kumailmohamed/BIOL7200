@@ -17,13 +17,17 @@ subject=$2
 # save the third argument as output
 output=$3
 
-# BLAST database from the subject file created
-makeblastdb -in "$subject" -dbtype nucl > /dev/null 2>&1
+# double check to make sure that there is an output file even if there are zero hits
+: > "$output"
 
-# run blastx and filter
-# >30% identity and >90% query coverage
-blastx -query "$query" -db "$subject" -outfmt "6 qseqid sseqid pident length qlen" \
-  | awk '$3 > 30 && $4/$5 > 0.9' > "$output"
+# blastx is run
+blastx \
+  -query "$query" \
+  -subject "$subject" \
+  -outfmt "6 qseqid sseqid pident length qlen" \
+  2>/dev/null \
+| awk '$3 > 30 && $4/$5 > 0.9' \
+> "$output"
 
 # print out the number of matches
 wc -l < "$output"
