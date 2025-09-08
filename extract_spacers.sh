@@ -17,17 +17,22 @@ asm="$2"
 # save the third argument as output which will contain the spacer sequences
 outfa="$3"
 
+# created a temp working directory that will be deleted as soon as script exits
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-# First we will find perfect repeat matches, so 100% identity and where alignment length equals query length
+# First we will find perfect repeat matches, so rows with 100% identity and where alignment length equals query length
 blastn -task blastn-short \
   -query "$qry" -subject "$asm" \
   -outfmt '6 sseqid sstart send length pident qlen' \
 | awk '$5==100 && $4==$6' \
 > "$tmp/repeat_hits.tsv"
 
-# Second we will convert to BED then normalize strand and then sort by contig/start/end
+# Second we will convert to BED
+# bed uses 0-based start coordinates and the end coordinates are exclusive
+# so if start <= end then start0 = sstart - 1 and end1 is send but if start > end, that means that the order needs
+# to be swapped because hit is on the reverse strand
+# then sort the results by contig and position
 awk 'BEGIN{OFS="\t"}{
   s=$2; e=$3;
   if (s<=e) { start=s-1; end=e } else { start=e-1; end=s }
@@ -36,14 +41,18 @@ awk 'BEGIN{OFS="\t"}{
 | sort -k1,1 -k2,2n -k3,3n \
 > "$tmp/repeats.bed"
 
-# Now compute spacers as gaps between adjacent repeats on the same contig [prev_end, next_start)
+# spacers will be the gaps between adjacent repeats on the same contig
+# so for each line in repeats.bed, check if its the same contig as before, and if the new start is > prev.end,
+# if it is then we print a BED line for the spacer
+# finally we update the prev_end for the next comparison
 awk 'BEGIN{OFS="\t"}{
   if ($1!=ctg){ ctg=$1; prev_end="" }
   if (prev_end!="" && $2>prev_end){ print $1, prev_end, $2 }
   prev_end=$3
 }' "$tmp/repeats.bed" > "$tmp/spacers.bed"
 
-# Extract spacer sequences with seqtk provided which should extract sequences in regions contained in a file
+# seqtk takes in a a fasta file and the bed file and then returns the DNA sequences from the assembly that 
+# correspond to what is in the bed file
 seqtk subseq "$asm" "$tmp/spacers.bed" > "$outfa"
 
 # provide the number of spacers
