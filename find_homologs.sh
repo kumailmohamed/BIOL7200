@@ -20,8 +20,8 @@ output=$3
 # double check to make sure that there is an output file even if there are zero hits
 : > "$output"
 
-# blastx is run
-blastx \
+# tblasn is used since this is a protein query vs translated nucleotide subject
+tblastn \
   -query "$query" \
   -subject "$subject" \
   -outfmt "6 qseqid sseqid pident length qlen" \
